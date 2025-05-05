@@ -1,3 +1,4 @@
+import requests
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -29,18 +30,63 @@ def load_data(tickers):
     return pd.DataFrame(data)
 
 # --- Sidebar ---
-st.sidebar.title("Pengaturan")
-# Contoh daftar ticker populer (bisa diganti/ditambah)
+# --- Fungsi untuk cari ticker dari Yahoo Finance Search API ---
+@st.cache_data(ttl=86400)
+def search_ticker(query):
+    url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}&lang=en-US"
+    try:
+        res = requests.get(url)
+        if res.status_code == 200:
+            data = res.json()
+            results = data.get("quotes", [])
+            return [f"{item['symbol']} - {item['shortname']}" for item in results if "symbol" in item]
+        else:
+            return []
+    except:
+        return []
+
+# --- Sidebar Input ---
+st.sidebar.title("📊 Pilih Saham")
+
+# ✅ Default tickers saham lokal
 default_tickers = [
-    "BMRI.JK", "PTBA.JK", "BJTM.JK", "SIDO.JK", "BSDE.JK", "ASII.JK", "AALI.JK", "ADRO.JK",
+    "BMRI.JK", "PTBA.JK", "BJTM.JK", "SIDO.JK",
+    "BSDE.JK", "ASII.JK", "AALI.JK", "ADRO.JK",
     "BBRI.JK", "BBCA.JK", "TLKM.JK", "UNVR.JK"
 ]
 
-tickers = st.sidebar.multiselect(
-    "Pilih saham yang ingin dianalisis:",
+# Bagian 1: Dropdown statis
+selected = st.sidebar.multiselect(
+    "📌 Pilih dari daftar umum:",
     options=sorted(default_tickers),
-    default=["BMRI.JK", "PTBA.JK", "BJTM.JK"]
+    default=st.session_state.get("saved_tickers", ["BBRI.JK", "BBCA.JK"])
 )
+
+# Bagian 2: Pencarian dinamis pakai API
+query = st.sidebar.text_input("🔍 Cari saham (Yahoo Finance):")
+if query:
+    result = search_ticker(query)
+    if result:
+        st.sidebar.write("Hasil pencarian:")
+        for r in result:
+            st.sidebar.write(r)
+    else:
+        st.sidebar.warning("Tidak ditemukan.")
+
+# Bagian 3: Input manual
+manual_input = st.sidebar.text_input("✍️ Tambahkan ticker manual (pisahkan dengan koma):")
+if manual_input:
+    manual_list = [t.strip().upper() for t in manual_input.split(",") if t.strip()]
+    selected.extend(manual_list)
+
+# Hapus duplikat
+tickers = list(set(selected))
+
+# Tombol simpan pilihan
+if st.sidebar.button("💾 Simpan Pilihan Saya"):
+    st.session_state["saved_tickers"] = tickers
+    st.sidebar.success("✅ Tersimpan! Gunakan kembali saat reload.")
+
 
 # Tambahan input manual juga (opsional)
 manual_input = st.sidebar.text_input("Atau masukkan kode ticker tambahan (pisahkan dengan koma):", "")
