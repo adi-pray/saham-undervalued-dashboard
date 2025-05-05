@@ -48,15 +48,14 @@ data.append({
 def search_ticker(query):
     url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}&lang=en-US"
     try:
-        res = requests.get(url)
-        if res.status_code == 200:
-            data = res.json()
-            results = data.get("quotes", [])
-            return [f"{item['symbol']} - {item['shortname']}" for item in results if "symbol" in item]
-        else:
-            return []
-    except:
-        return []
+    res = requests.get(url)
+    res.raise_for_status()
+    data = res.json()
+    results = data.get("quotes", [])
+    return [f"{item['symbol']} - {item['shortname']}" for item in results if "symbol" in item]
+except Exception as e:
+    return []
+
 
 # --- Sidebar Input ---
 st.sidebar.title("📊 Pilih Saham")
