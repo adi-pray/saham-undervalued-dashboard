@@ -32,7 +32,7 @@ def load_data(tickers):
 st.sidebar.title("Pengaturan")
 # Contoh daftar ticker populer (bisa diganti/ditambah)
 default_tickers = [
-    "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", "NFLX",
+    "BMRI.JK", "PTBA.JK", "BJTM.JK", "SIDO.JK", "BSDE.JK", "ASII.JK", "AALI.JK", "ADRO.JK",
     "BBRI.JK", "BBCA.JK", "TLKM.JK", "UNVR.JK"
 ]
 
