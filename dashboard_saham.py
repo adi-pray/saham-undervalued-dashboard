@@ -30,7 +30,7 @@ def load_data(tickers):
 
 # --- Sidebar ---
 st.sidebar.title("Pengaturan")
-tickers_input = st.sidebar.text_area("Masukkan daftar ticker (pisahkan dengan koma):", "AAPL,MSFT,GOOGL,AMZN,TSLA")
+tickers_input = st.sidebar.text_area("Masukkan daftar ticker (pisahkan dengan koma):", "ASII,BMRI,PTBA,BBRI,ABMM,BREN,ADRO")
 tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
 refresh = st.sidebar.button("🔄 Refresh Data")
 
