@@ -30,8 +30,25 @@ def load_data(tickers):
 
 # --- Sidebar ---
 st.sidebar.title("Pengaturan")
-tickers_input = st.sidebar.text_area("Masukkan daftar ticker (pisahkan dengan koma):", "ASII,BMRI,PTBA,BBRI,ABMM,BREN,ADRO")
-tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
+# Contoh daftar ticker populer (bisa diganti/ditambah)
+default_tickers = [
+    "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", "NFLX",
+    "BBRI.JK", "BBCA.JK", "TLKM.JK", "UNVR.JK"
+]
+
+tickers = st.sidebar.multiselect(
+    "Pilih saham yang ingin dianalisis:",
+    options=sorted(default_tickers),
+    default=["AAPL", "MSFT", "GOOGL"]
+)
+
+# Tambahan input manual juga (opsional)
+manual_input = st.sidebar.text_input("Atau masukkan kode ticker tambahan (pisahkan dengan koma):", "")
+if manual_input:
+    manual_list = [t.strip().upper() for t in manual_input.split(",") if t.strip()]
+    tickers.extend(manual_list)
+    tickers = list(set(tickers))  # hilangkan duplikat
+
 refresh = st.sidebar.button("🔄 Refresh Data")
 
 # --- Load dan tampilkan data ---
