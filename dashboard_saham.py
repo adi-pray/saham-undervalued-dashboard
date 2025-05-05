@@ -39,7 +39,7 @@ default_tickers = [
 tickers = st.sidebar.multiselect(
     "Pilih saham yang ingin dianalisis:",
     options=sorted(default_tickers),
-    default=["AAPL", "MSFT", "GOOGL"]
+    default=["BMRI.JK", "PTBA.JK", "BJTM.JK"]
 )
 
 # Tambahan input manual juga (opsional)
