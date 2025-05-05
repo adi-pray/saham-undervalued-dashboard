@@ -18,13 +18,26 @@ def load_data(tickers):
             fair_value = eps * 15 if eps else 0
             undervalued = price < fair_value * 0.8 if fair_value else False
 
-            data.append({
-                "Ticker": ticker,
-                "Price": price,
-                "EPS": eps,
-                "Fair Value (Est.)": round(fair_value, 2),
-                "Undervalued": undervalued
-            })
+            # --- Rekomendasi beli/jual/netral ---
+rekom = "⚖️ Tahan"
+if summary["undervalued"] and summary["per"] and summary["pbv"] and summary["roe"]:
+    if summary["per"] < 15 and summary["pbv"] < 1.5 and summary["roe"] > 10:
+        rekom = "🟢 Beli"
+elif summary["per"] and summary["per"] > 20 and summary["price"] > summary["fair_value"]:
+    rekom = "🔴 Jual"
+
+data.append({
+    "Ticker": t,
+    "Harga": summary["price"],
+    "EPS": summary["eps"],
+    "PER": summary["per"],
+    "PBV": summary["pbv"],
+    "ROE (%)": summary["roe"],
+    "Fair Value": summary["fair_value"],
+    "Undervalued": "✅" if summary["undervalued"] else "❌",
+    "Rekomendasi": rekom
+})
+
         except Exception as e:
             st.warning(f"Gagal ambil data {ticker}: {e}")
     return pd.DataFrame(data)
