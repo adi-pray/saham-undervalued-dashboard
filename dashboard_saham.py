@@ -1,4 +1,3 @@
-
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -24,13 +23,13 @@ st.sidebar.title("📊 Pilih Saham")
 default_tickers = [
     "BMRI.JK", "PTBA.JK", "BJTM.JK", "SIDO.JK",
     "BSDE.JK", "ASII.JK", "AALI.JK", "ADRO.JK",
-    "BBRI.JK", "BBCA.JK", "TLKM.JK", "UNVR.JK"
+    "BBRI.JK", "PGAS.JK", "AADI.JK", "UNVR.JK"
 ]
 
 selected = st.sidebar.multiselect(
     "📌 Pilih dari daftar umum:",
     options=sorted(default_tickers),
-    default=st.session_state.get("saved_tickers", ["BBRI.JK", "BBCA.JK"])
+    default=st.session_state.get("saved_tickers", ["BBRI.JK", "BMRI.JK"])
 )
 
 query = st.sidebar.text_input("🔍 Cari saham (Yahoo Finance):")
@@ -111,3 +110,4 @@ for t in tickers:
             x="Date:T", y="Close:Q"
         ).properties(height=300)
         st.altair_chart(chart, use_container_width=True)
+
