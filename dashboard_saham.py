@@ -3,41 +3,11 @@ import yfinance as yf
 import pandas as pd
 import altair as alt
 import requests
-from datetime import datetime
 
-st.set_page_config(
-    page_title="Professional Stock Screener",
-    page_icon="📈",
-    layout="wide"
-)
+st.set_page_config(page_title="Saham Undervalued", layout="wide")
 
 # =========================
-# Utility
-# =========================
-def fmt_num(v, digits=2):
-    if v is None or pd.isna(v):
-        return "-"
-    return f"{v:,.{digits}f}"
-
-def fmt_pct(v, digits=2):
-    if v is None or pd.isna(v):
-        return "-"
-    return f"{v:,.{digits}f}%"
-
-def recommendation_badge(rec):
-    if rec == "BUY":
-        return "🟢 BUY"
-    if rec == "SELL":
-        return "🔴 SELL"
-    return "🟡 HOLD"
-
-def screening_badge(mode):
-    if mode == "Value Investing":
-        return "Value"
-    return "Dividend + Value"
-
-# =========================
-# Data Fetching
+# Helpers
 # =========================
 @st.cache_data(ttl=86400)
 def search_ticker(query):
@@ -48,21 +18,19 @@ def search_ticker(query):
         res.raise_for_status()
         data = res.json()
         results = data.get("quotes", [])
-        cleaned = []
-        for item in results:
-            symbol = item.get("symbol")
-            name = item.get("shortname") or item.get("longname") or ""
-            if symbol:
-                cleaned.append({
-                    "symbol": symbol,
-                    "label": f"{symbol} - {name}"
-                })
-        return cleaned
+        return [
+            {
+                "label": f"{item.get('symbol', '')} - {item.get('shortname', item.get('longname', ''))}",
+                "symbol": item.get("symbol", "")
+            }
+            for item in results
+            if item.get("symbol")
+        ]
     except Exception:
         return []
 
 @st.cache_data(ttl=3600)
-def get_stock_data(ticker):
+def get_summary_data(ticker):
     try:
         stock = yf.Ticker(ticker)
         info = stock.info or {}
@@ -71,26 +39,15 @@ def get_stock_data(ticker):
         if hist.empty:
             return None
 
-        close_series = hist["Close"].dropna()
-        if close_series.empty:
-            return None
-
         price = info.get("currentPrice")
         if price is None:
-            price = float(close_series.iloc[-1])
+            close_series = hist["Close"].dropna()
+            price = close_series.iloc[-1] if not close_series.empty else None
 
         eps = info.get("trailingEps")
         pbv = info.get("priceToBook")
         roe_raw = info.get("returnOnEquity")
         roe = roe_raw * 100 if roe_raw is not None else None
-
-        dividend_yield_raw = info.get("dividendYield")
-        dividend_yield = dividend_yield_raw * 100 if dividend_yield_raw is not None else None
-
-        market_cap = info.get("marketCap")
-        sector = info.get("sector")
-        industry = info.get("industry")
-        long_name = info.get("longName") or info.get("shortName") or ticker
 
         per = (price / eps) if (price is not None and eps is not None and eps > 0) else None
         fair_value = (eps * 15) if (eps is not None and eps > 0) else None
@@ -108,17 +65,11 @@ def get_stock_data(ticker):
         )
 
         return {
-            "ticker": ticker,
-            "name": long_name,
-            "sector": sector,
-            "industry": industry,
             "price": price,
             "eps": eps,
-            "per": per,
             "pbv": pbv,
             "roe": roe,
-            "dividend_yield": dividend_yield,
-            "market_cap": market_cap,
+            "per": per,
             "fair_value": fair_value,
             "undervalued": undervalued,
             "upside_pct": upside_pct,
@@ -127,16 +78,13 @@ def get_stock_data(ticker):
     except Exception:
         return None
 
-# =========================
-# Scoring & Recommendation
-# =========================
-def classify_recommendation(row):
-    price = row.get("price")
-    fair_value = row.get("fair_value")
-    per = row.get("per")
-    pbv = row.get("pbv")
-    roe = row.get("roe")
-    undervalued = row.get("undervalued")
+def classify_recommendation(summary):
+    price = summary.get("price")
+    per = summary.get("per")
+    pbv = summary.get("pbv")
+    roe = summary.get("roe")
+    fair_value = summary.get("fair_value")
+    undervalued = summary.get("undervalued")
 
     if (
         undervalued
@@ -144,7 +92,7 @@ def classify_recommendation(row):
         and pbv is not None and pbv < 1.5
         and roe is not None and roe > 10
     ):
-        return "BUY"
+        return "🟢 Beli"
 
     if (
         per is not None and per > 20
@@ -152,32 +100,33 @@ def classify_recommendation(row):
         and price is not None
         and price > fair_value
     ):
-        return "SELL"
+        return "🔴 Jual"
 
-    return "HOLD"
+    return "⚖️ Tahan"
 
-def calculate_score(row, mode):
+def calculate_score(summary):
+    """
+    Score sederhana untuk ranking.
+    Semakin tinggi semakin menarik.
+    """
     score = 0
 
-    per = row.get("per")
-    pbv = row.get("pbv")
-    roe = row.get("roe")
-    undervalued = row.get("undervalued")
-    upside_pct = row.get("upside_pct")
-    dividend_yield = row.get("dividend_yield")
+    per = summary.get("per")
+    pbv = summary.get("pbv")
+    roe = summary.get("roe")
+    upside_pct = summary.get("upside_pct")
+    undervalued = summary.get("undervalued")
 
     if undervalued:
         score += 30
 
     if per is not None:
-        if per < 8:
+        if per < 10:
             score += 25
-        elif per < 12:
-            score += 20
         elif per < 15:
-            score += 12
+            score += 18
         elif per < 20:
-            score += 5
+            score += 8
 
     if pbv is not None:
         if pbv < 1:
@@ -199,80 +148,250 @@ def calculate_score(row, mode):
         if upside_pct > 50:
             score += 20
         elif upside_pct > 30:
-            score += 14
+            score += 12
         elif upside_pct > 15:
-            score += 8
-
-    if mode == "Dividend + Value":
-        if dividend_yield is not None:
-            if dividend_yield > 8:
-                score += 20
-            elif dividend_yield > 5:
-                score += 14
-            elif dividend_yield > 3:
-                score += 8
+            score += 6
 
     return score
+
+def style_recommendation(val):
+    if "Beli" in str(val):
+        return "background-color: #d4edda; color: #155724; font-weight: bold;"
+    if "Jual" in str(val):
+        return "background-color: #f8d7da; color: #721c24; font-weight: bold;"
+    return "background-color: #fff3cd; color: #856404; font-weight: bold;"
+
+def format_number(v, digits=2):
+    if v is None or pd.isna(v):
+        return "-"
+    return f"{v:,.{digits}f}"
 
 # =========================
 # Sidebar
 # =========================
-st.sidebar.title("📊 Stock Screener")
+st.sidebar.title("📊 Pilih Saham")
 
 default_tickers = [
     "BMRI.JK", "PTBA.JK", "BJTM.JK", "SIDO.JK",
     "BSDE.JK", "ASII.JK", "AALI.JK", "ADRO.JK",
-    "BBRI.JK", "BBCA.JK", "TLKM.JK", "UNVR.JK"
+    "BBRI.JK", "BBCA.JK", "TLKM.JK", "UNVR.JK",
+    "AADI.JK", "ABMM.JK", "INKP.JK", "TKIM.JK
 ]
 
 if "saved_tickers" not in st.session_state:
-    st.session_state["saved_tickers"] = ["BBRI.JK", "BBCA.JK", "BMRI.JK", "TLKM.JK"]
+    st.session_state["saved_tickers"] = ["BBRI.JK", "BBCA.JK"]
 
 selected = st.sidebar.multiselect(
-    "Pilih ticker umum",
+    "📌 Pilih dari daftar umum:",
     options=sorted(default_tickers),
     default=st.session_state["saved_tickers"]
 )
 
-query = st.sidebar.text_input("Cari ticker Yahoo Finance")
+query = st.sidebar.text_input("🔍 Cari saham (Yahoo Finance)")
 if query:
-    results = search_ticker(query)
-    if results:
-        search_selected = st.sidebar.multiselect(
-            "Hasil pencarian",
-            options=[x["symbol"] for x in results],
-            format_func=lambda x: next((i["label"] for i in results if i["symbol"] == x), x)
+    search_results = search_ticker(query)
+    if search_results:
+        selected_search = st.sidebar.multiselect(
+            "Hasil pencarian:",
+            options=[item["symbol"] for item in search_results],
+            format_func=lambda x: next(
+                (item["label"] for item in search_results if item["symbol"] == x), x
+            )
         )
-        selected.extend(search_selected)
+        selected.extend(selected_search)
     else:
-        st.sidebar.warning("Ticker tidak ditemukan.")
+        st.sidebar.warning("Tidak ditemukan.")
 
-manual_input = st.sidebar.text_input("Tambah ticker manual (pisahkan koma)")
+manual_input = st.sidebar.text_input("✍️ Tambahkan ticker manual (pisahkan koma)")
 if manual_input:
     manual_list = [t.strip().upper() for t in manual_input.split(",") if t.strip()]
     selected.extend(manual_list)
 
 tickers = sorted(list(set(selected)))
 
-if st.sidebar.button("💾 Simpan Pilihan"):
+if st.sidebar.button("💾 Simpan Pilihan Saya"):
     st.session_state["saved_tickers"] = tickers
-    st.sidebar.success("Pilihan disimpan.")
+    st.sidebar.success("✅ Tersimpan!")
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Screening")
-
-screen_mode = st.sidebar.selectbox(
-    "Mode Screening",
-    ["Value Investing", "Dividend + Value"]
-)
-
-show_only_undervalued = st.sidebar.checkbox("Hanya tampilkan undervalued", value=False)
-min_roe = st.sidebar.slider("Minimum ROE (%)", 0, 30, 10)
-max_per = st.sidebar.slider("Maksimum PER", 0, 40, 20)
-max_pbv = st.sidebar.slider("Maksimum PBV", 0.0, 5.0, 2.0, 0.1)
-min_div_yield = st.sidebar.slider("Minimum Dividend Yield (%)", 0.0, 15.0, 0.0, 0.5)
+show_only_undervalued = st.sidebar.checkbox("Tampilkan hanya undervalued", value=False)
+show_charts = st.sidebar.checkbox("Tampilkan chart historis per saham", value=True)
+show_comparison_chart = st.sidebar.checkbox("Tampilkan chart perbandingan", value=True)
 
 # =========================
+# Data Collection
+# =========================
+rows = []
+histories = []
+
+for t in tickers:
+    summary = get_summary_data(t)
+    if summary:
+        rekom = classify_recommendation(summary)
+        score = calculate_score(summary)
+
+        rows.append({
+            "Ticker": t,
+            "Harga": summary["price"],
+            "EPS": summary["eps"],
+            "PER": summary["per"],
+            "PBV": summary["pbv"],
+            "ROE (%)": summary["roe"],
+            "Fair Value": summary["fair_value"],
+            "Upside (%)": summary["upside_pct"],
+            "Undervalued": "✅" if summary["undervalued"] else "❌",
+            "Rekomendasi": rekom,
+            "Score": score
+        })
+
+        hist = summary["hist"].copy().reset_index()
+        if not hist.empty:
+            base_price = hist["Close"].iloc[0]
+            if pd.notna(base_price) and base_price != 0:
+                hist["Indexed"] = (hist["Close"] / base_price) * 100
+                hist["Ticker"] = t
+                histories.append(hist[["Date", "Ticker", "Close", "Indexed"]])
+
+df = pd.DataFrame(rows)
+
+if df.empty:
+    st.title("📈 Dashboard Saham Undervalued")
+    st.info("Belum ada data yang bisa ditampilkan.")
+    st.stop()
+
+# Filter undervalued
+if show_only_undervalued:
+    df = df[df["Undervalued"] == "✅"].copy()
+
+# Sort ranking
+df = df.sort_values(by=["Score", "Upside (%)"], ascending=[False, False], na_position="last").reset_index(drop=True)
+
+# =========================
+# Header
+# =========================
+st.title("📈 Dashboard Saham Undervalued")
+
+col1, col2, col3, col4 = st.columns(4)
+
+total_saham = len(df)
+jumlah_beli = (df["Rekomendasi"] == "🟢 Beli").sum()
+jumlah_tahan = (df["Rekomendasi"] == "⚖️ Tahan").sum()
+jumlah_jual = (df["Rekomendasi"] == "🔴 Jual").sum()
+
+col1.metric("Total Saham", total_saham)
+col2.metric("🟢 Beli", jumlah_beli)
+col3.metric("⚖️ Tahan", jumlah_tahan)
+col4.metric("🔴 Jual", jumlah_jual)
+
+# =========================
+# Ranking
+# =========================
+st.subheader("🏆 Ranking Saham Terbaik")
+
+top_df = df[[
+    "Ticker", "Harga", "PER", "PBV", "ROE (%)",
+    "Fair Value", "Upside (%)", "Rekomendasi", "Score"
+]].copy()
+
+styled_top_df = (
+    top_df.style
+    .format({
+        "Harga": lambda x: format_number(x, 2),
+        "PER": lambda x: format_number(x, 2),
+        "PBV": lambda x: format_number(x, 2),
+        "ROE (%)": lambda x: format_number(x, 2),
+        "Fair Value": lambda x: format_number(x, 2),
+        "Upside (%)": lambda x: format_number(x, 2),
+        "Score": lambda x: format_number(x, 0),
+    })
+    .map(style_recommendation, subset=["Rekomendasi"])
+)
+
+st.dataframe(styled_top_df, use_container_width=True)
+
+# =========================
+# Tabel utama
+# =========================
+st.subheader("📋 Ringkasan Fundamental")
+
+main_df = df[[
+    "Ticker", "Harga", "EPS", "PER", "PBV", "ROE (%)",
+    "Fair Value", "Upside (%)", "Undervalued", "Rekomendasi", "Score"
+]].copy()
+
+styled_main_df = (
+    main_df.style
+    .format({
+        "Harga": lambda x: format_number(x, 2),
+        "EPS": lambda x: format_number(x, 2),
+        "PER": lambda x: format_number(x, 2),
+        "PBV": lambda x: format_number(x, 2),
+        "ROE (%)": lambda x: format_number(x, 2),
+        "Fair Value": lambda x: format_number(x, 2),
+        "Upside (%)": lambda x: format_number(x, 2),
+        "Score": lambda x: format_number(x, 0),
+    })
+    .map(style_recommendation, subset=["Rekomendasi"])
+)
+
+st.dataframe(styled_main_df, use_container_width=True)
+
+# =========================
+# Chart perbandingan
+# =========================
+if show_comparison_chart and histories:
+    st.subheader("📉 Perbandingan Performa Harga (Base 100)")
+    all_hist = pd.concat(histories, ignore_index=True)
+
+    visible_tickers = df["Ticker"].tolist()
+    all_hist = all_hist[all_hist["Ticker"].isin(visible_tickers)]
+
+    if not all_hist.empty:
+        comparison_chart = (
+            alt.Chart(all_hist)
+            .mark_line()
+            .encode(
+                x=alt.X("Date:T", title="Tanggal"),
+                y=alt.Y("Indexed:Q", title="Indexed Performance (Base 100)"),
+                color="Ticker:N",
+                tooltip=["Date:T", "Ticker:N", alt.Tooltip("Indexed:Q", format=".2f")]
+            )
+            .properties(height=420)
+            .interactive()
+        )
+        st.altair_chart(comparison_chart, use_container_width=True)
+
+# =========================
+# Chart historis per saham
+# =========================
+if show_charts:
+    st.subheader("📊 Harga Historis per Saham")
+    for ticker in df["Ticker"].tolist():
+        summary = get_summary_data(ticker)
+        if summary and not summary["hist"].empty:
+            hist_df = summary["hist"].reset_index()[["Date", "Close"]]
+
+            chart = (
+                alt.Chart(hist_df)
+                .mark_line()
+                .encode(
+                    x=alt.X("Date:T", title="Tanggal"),
+                    y=alt.Y("Close:Q", title="Harga Penutupan"),
+                    tooltip=["Date:T", alt.Tooltip("Close:Q", format=".2f")]
+                )
+                .properties(height=280, title=ticker)
+                .interactive()
+            )
+            st.altair_chart(chart, use_container_width=True)
+
+# =========================
+# Catatan
+# =========================
+st.markdown("---")
+st.caption(
+    "Metode fair value di dashboard ini masih sederhana: Fair Value = EPS × 15. "
+    "Gunakan sebagai screening awal, bukan satu-satunya dasar keputusan investasi."
+)
 # Build Dataset
 # =========================
 rows = []
@@ -585,3 +704,4 @@ st.caption(
     "Catatan: fair value pada aplikasi ini masih memakai pendekatan sederhana: EPS × 15. "
     "Gunakan untuk screening awal, bukan sebagai satu-satunya dasar keputusan investasi."
 )
+
