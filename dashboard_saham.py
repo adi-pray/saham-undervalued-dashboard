@@ -175,7 +175,6 @@ default_tickers = [
     "BMRI.JK", "PTBA.JK", "BJTM.JK", "SIDO.JK",
     "BSDE.JK", "ASII.JK", "AALI.JK", "ADRO.JK",
     "BBRI.JK", "BBCA.JK", "TLKM.JK", "UNVR.JK",
-    "AADI.JK", "ABMM.JK", "INKP.JK", "TKIM.JK
 ]
 
 if "saved_tickers" not in st.session_state:
@@ -704,4 +703,5 @@ st.caption(
     "Catatan: fair value pada aplikasi ini masih memakai pendekatan sederhana: EPS × 15. "
     "Gunakan untuk screening awal, bukan sebagai satu-satunya dasar keputusan investasi."
 )
+
 
